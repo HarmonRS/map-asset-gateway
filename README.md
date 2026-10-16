@@ -115,6 +115,9 @@ Supported token delivery:
 
 ## API
 
+See [docs/API.md](./docs/API.md) for a calling guide with auth, request/response
+examples and the LAN exposure checklist.
+
 ### System
 
 - `GET /health`
