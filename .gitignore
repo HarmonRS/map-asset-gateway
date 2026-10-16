@@ -1,0 +1,31 @@
+﻿# --- Runtime data (never commit) -------------------------------------------
+# data/ holds the production SQLite catalog, the tile tree and the vector
+# assets. It is machine state, not source.
+data/
+
+# --- Build and toolchain caches --------------------------------------------
+.gocache/
+.gomodcache/
+.gopath/
+.gotmp/
+bin/
+temp/
+.tmp/
+logs/
+
+# --- Machine-specific config -----------------------------------------------
+# config/service.env carries absolute paths for one machine; the .example file
+# is the template to copy from.
+config/service.env
+
+# --- Tooling artifacts ------------------------------------------------------
+.claude/
+.codex/
+.impeccable/
+__pycache__/
+*.pyc
+
+# --- OS/editor noise --------------------------------------------------------
+Thumbs.db
+Desktop.ini
+*.swp
