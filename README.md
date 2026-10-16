@@ -115,8 +115,11 @@ Supported token delivery:
 
 ## API
 
-See [docs/API.md](./docs/API.md) for a calling guide with auth, request/response
-examples and the LAN exposure checklist.
+- [docs/GUIDE.md](./docs/GUIDE.md) — task-oriented walkthrough: first tile,
+  integrating with a map frontend, accumulating drone imagery over several
+  flights, downstream integration and troubleshooting.
+- [docs/API.md](./docs/API.md) — endpoint reference: auth, every route grouped by
+  purpose, slicing request/job shapes, error codes, LAN exposure checklist.
 
 ### System
 
