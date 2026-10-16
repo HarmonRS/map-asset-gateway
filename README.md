@@ -289,6 +289,10 @@ basemap, so they are guarded:
 - configure `ADMIN_TOKEN` for API clients (`Authorization: Bearer <token>`)
 - with neither set, the service **refuses to start** unless `API_HOST` is a
   loopback address (`127.0.0.1`, `::1`, `localhost`)
+- the admin surface is **loopback-only by default**, so the service can bind
+  `0.0.0.0` to serve tiles on the LAN while the console stays reachable only
+  from this machine; `ADMIN_ALLOW_REMOTE=true` opens it up and then requires
+  credentials
 
 Cross-origin requests are denied by default; add the exact origins you trust to
 `CORS_ALLOWED_ORIGINS`. Client tokens never appear in redirect URLs, and tokens

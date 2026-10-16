@@ -28,6 +28,7 @@ type Config struct {
 	AdminToken         string
 	AdminUser          string
 	AdminPassword      string
+	AdminAllowRemote   bool
 	CORSAllowedOrigins []string
 	TokenDefaultTTL    time.Duration
 
@@ -49,6 +50,10 @@ func Load() (Config, error) {
 	autoScanOnStart, err := boolEnv("AUTO_SCAN_ON_START", true)
 	if err != nil {
 		return Config{}, fmt.Errorf("parse AUTO_SCAN_ON_START: %w", err)
+	}
+	adminAllowRemote, err := boolEnv("ADMIN_ALLOW_REMOTE", false)
+	if err != nil {
+		return Config{}, fmt.Errorf("parse ADMIN_ALLOW_REMOTE: %w", err)
 	}
 	tokenDefaultTTL, err := durationEnv("TOKEN_DEFAULT_TTL", 720*time.Hour)
 	if err != nil {
@@ -76,6 +81,7 @@ func Load() (Config, error) {
 		AdminToken:          strings.TrimSpace(stringEnv("ADMIN_TOKEN", "")),
 		AdminUser:           strings.TrimSpace(stringEnv("ADMIN_USER", "")),
 		AdminPassword:       stringEnv("ADMIN_PASSWORD", ""),
+		AdminAllowRemote:    adminAllowRemote,
 		CORSAllowedOrigins:  listEnv("CORS_ALLOWED_ORIGINS"),
 		TokenDefaultTTL:     tokenDefaultTTL,
 		HealthCheckInterval: healthCheckInterval,

@@ -87,7 +87,7 @@ func run(ctx context.Context) error {
 
 	// The admin surface can create tokens that read every basemap, so it must
 	// never be reachable off-host without credentials.
-	if cfg.BindsToNonLoopback() && !cfg.HasAdminCredentials() {
+	if cfg.BindsToNonLoopback() && cfg.AdminAllowRemote && !cfg.HasAdminCredentials() {
 		return fmt.Errorf("refusing to listen on %s without admin credentials: set ADMIN_TOKEN or ADMIN_USER/ADMIN_PASSWORD", cfg.ListenAddr())
 	}
 
@@ -149,9 +149,10 @@ func run(ctx context.Context) error {
 
 	server, err := basemapapi.New(store, systemInfo, basemapapi.Options{
 		Admin: basemapapi.AdminAuth{
-			Token:    cfg.AdminToken,
-			User:     cfg.AdminUser,
-			Password: cfg.AdminPassword,
+			Token:       cfg.AdminToken,
+			User:        cfg.AdminUser,
+			Password:    cfg.AdminPassword,
+			AllowRemote: cfg.AdminAllowRemote,
 		},
 		CORSAllowedOrigins: cfg.CORSAllowedOrigins,
 	})

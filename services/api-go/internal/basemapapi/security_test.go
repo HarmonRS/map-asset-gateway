@@ -277,3 +277,55 @@ func TestScanErrorStatusMapping(t *testing.T) {
 		}
 	}
 }
+
+func TestAdminIsLoopbackOnlyByDefault(t *testing.T) {
+	store := newTestStore(t, t.TempDir())
+	server, err := New(store, basemap.SystemInfo{ServiceName: "basemap-pusher"}, Options{})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	handler := server.Handler()
+
+	call := func(path, remote string) int {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		request.RemoteAddr = remote
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		return recorder.Code
+	}
+
+	if got := call("/api/v1/admin/basemaps", "127.0.0.1:5555"); got != http.StatusOK {
+		t.Fatalf("expected local admin access, got %d", got)
+	}
+	if got := call("/api/v1/admin/basemaps", "192.168.1.50:5555"); got != http.StatusForbidden {
+		t.Fatalf("expected a remote admin request to be refused, got %d", got)
+	}
+
+	// The point of the split: tile traffic still reaches the service from the
+	// LAN, it just has to carry a valid token.
+	if got := call("/tiles/demo/current/0/0/0.png", "192.168.1.50:5555"); got != http.StatusUnauthorized {
+		t.Fatalf("expected the tile route to stay reachable from the LAN (401), got %d", got)
+	}
+	if got := call("/health", "192.168.1.50:5555"); got != http.StatusOK {
+		t.Fatalf("expected health to stay reachable, got %d", got)
+	}
+}
+
+func TestAdminAllowRemoteOptIn(t *testing.T) {
+	store := newTestStore(t, t.TempDir())
+	server, err := New(store, basemap.SystemInfo{ServiceName: "basemap-pusher"}, Options{
+		Admin: AdminAuth{AllowRemote: true},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/admin/basemaps", nil)
+	request.RemoteAddr = "192.168.1.50:5555"
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected ADMIN_ALLOW_REMOTE to permit remote admin calls, got %d", recorder.Code)
+	}
+}

@@ -281,33 +281,70 @@ curl -o 0.webp "http://127.0.0.1:8910/tiles/gaode-image/current/0/0/0.webp?token
 
 ## 7. 局域网开放
 
-默认 `API_HOST=127.0.0.1`，**只有本机能访问**。要让同局域网的其他机器打开运维台，
-必须在 `config/service.env` 里同时改三处：
+默认 `API_HOST=127.0.0.1`，只有本机能访问。**管理台和切片可以分开暴露**：
+
+### 推荐：切片上局域网，管理台仍只在本机
+
+服务绑到所有网卡，但管理员路由**只接受来自回环地址的请求**（默认行为）：
 
 ```ini
-# 1) 监听所有网卡
+# config/service.env
+
+# 1) 监听所有网卡，切片才能被其他机器取到
 API_HOST=0.0.0.0
 
-# 2) 配管理员凭据 —— 浏览器打开运维台必须有 Basic 账号密码；
-#    只配 ADMIN_TOKEN 的话浏览器没法带 Bearer，页面会 401
-ADMIN_USER=ops
-ADMIN_PASSWORD=<改掉它>
-
-# 3) 对外地址改成局域网 IP 或主机名
+# 2) 对外地址改成局域网 IP（你这台是 192.168.1.62），
+#    否则台账里的 url_template 发出去还是 127.0.0.1
 API_BASE_URL=http://192.168.1.62:8910
 TILE_PUBLIC_BASE_URL=http://192.168.1.62:8910
 VECTOR_PUBLIC_BASE_URL=http://192.168.1.62:8910
+
+# 3) 管理员路由保持仅回环（默认就是 false，写出来是为了明确）
+ADMIN_ALLOW_REMOTE=false
 ```
 
-改完重启服务，**并跑一次扫描**（`POST /api/v1/admin/scan-sources/local-basemaps/run`）——
-台账里的 `url_template` 是扫描时用 base URL 拼出来的，不重扫的话对外仍然是旧的
+这样：`/tiles/*`、`/vectors/*`、`/api/v1/catalog/*`、`/health` 等从局域网可达
+（取图仍需令牌）；`/admin/*` 与 `/api/v1/admin/*` 从其他机器请求会返回 **403**。
+
+**改完必须重启服务并重扫一次**：
+
+```
+POST /api/v1/admin/scan-sources/local-basemaps/run
+```
+
+台账里的 `url_template` 是扫描时用 base URL 拼出来的，不重扫的话对外仍是旧的
 `127.0.0.1` 地址。
 
-还要放行防火墙入站：
+放行防火墙入站：
 
 ```powershell
 New-NetFirewallRule -DisplayName "Basemap Pusher 8910" -Direction Inbound `
   -Protocol TCP -LocalPort 8910 -Action Allow
 ```
 
-之后局域网内访问 `http://192.168.1.62:8910/admin/`，浏览器会弹 Basic 认证框。
+### 可选：管理台也上局域网
+
+把 `ADMIN_ALLOW_REMOTE=true` 打开（或在局域网内直接用管理台）。此时**必须**配置
+管理员凭据，否则服务拒绝启动：
+
+```ini
+ADMIN_ALLOW_REMOTE=true
+ADMIN_USER=ops
+ADMIN_PASSWORD=<改掉它>
+```
+
+浏览器会弹 Basic 认证框，此时局域网内访问 `http://192.168.1.62:8910/admin/`。
+
+### 启动守卫规则
+
+| API_HOST | ADMIN_ALLOW_REMOTE | 有管理员凭据 | 结果 |
+|---|---|---|---|
+| 回环 | 任意 | 任意 | 正常启动 |
+| 非回环 | false（默认） | 不需要 | 正常启动，管理员路由仅回环 |
+| 非回环 | true | 是 | 正常启动，管理台可远程访问 |
+| 非回环 | true | 否 | **拒绝启动** |
+
+### 安全提醒
+
+这是明文 HTTP，Basic 凭据与令牌在网线上只是 base64，没有加密。内网自用没问题，
+但如果要跨网段或给外部系统调用，建议前面挂 Nginx 上 HTTPS。

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -23,6 +24,9 @@ type AdminAuth struct {
 	Token    string
 	User     string
 	Password string
+	// AllowRemote permits admin requests from other hosts. Off by default: the
+	// service can then serve tiles to the LAN while the console stays local.
+	AllowRemote bool
 }
 
 func (a AdminAuth) enabled() bool {
@@ -348,6 +352,10 @@ func (s *Server) routes() {
 // service is only reachable on loopback, which main enforces at startup.
 func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.admin.AllowRemote && !isLoopbackRequest(r) {
+			writeError(w, http.StatusForbidden, errors.New("admin endpoints are loopback-only; set ADMIN_ALLOW_REMOTE=true to accept remote callers"))
+			return
+		}
 		if !s.admin.enabled() {
 			next(w, r)
 			return
@@ -361,6 +369,20 @@ func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// isLoopbackRequest reports whether the request reached us over a loopback
+// address. RemoteAddr is the only trustworthy source here; X-Forwarded-For is
+// attacker-controlled unless a trusted proxy is in front.
+func isLoopbackRequest(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	if err != nil {
+		host = strings.TrimSpace(r.RemoteAddr)
+	}
+	ip := net.ParseIP(strings.Trim(host, "[]"))
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback()
+}
 func (s *Server) adminAllows(r *http.Request) bool {
 	if token := strings.TrimSpace(s.admin.Token); token != "" {
 		header := strings.TrimSpace(r.Header.Get("Authorization"))
