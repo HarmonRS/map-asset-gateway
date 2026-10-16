@@ -870,3 +870,90 @@ func TestTileJobSingleSourceSkipsMosaic(t *testing.T) {
 		t.Fatalf("expected the single source to slice directly, got %q (%s)", jobs[0].Status, jobs[0].Message)
 	}
 }
+
+func TestReadAllScopeCoversNewResourcesAndNeverExpires(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	tileRoot := filepath.Join(root, "tiles")
+	vectorRoot := filepath.Join(root, "vectors")
+	writeTestFile(t, filepath.Join(tileRoot, "first", "0", "0", "0.webp"), "tile")
+
+	store := openTestStore(t, StoreConfig{
+		SQLitePath:      filepath.Join(root, "basemap.db"),
+		ScanRoot:        tileRoot,
+		VectorScanRoot:  vectorRoot,
+		APIBaseURL:      "http://127.0.0.1:8910",
+		TileBaseURL:     "http://127.0.0.1:8910",
+		VectorBaseURL:   "http://127.0.0.1:8910",
+		TokenDefaultTTL: time.Hour,
+	})
+	if _, err := store.RunScan(ctx, defaultScanSourceCode); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+
+	// No grants at all, and NoExpiry instead of the default hour.
+	created, err := store.CreateToken(ctx, CreateTokenInput{
+		Name:     "insar",
+		Scopes:   []string{"read_all"},
+		NoExpiry: true,
+	})
+	if err != nil {
+		t.Fatalf("create read_all token: %v", err)
+	}
+	if created.Meta.ExpiresAt != nil {
+		t.Fatalf("expected no expiry, got %v", created.Meta.ExpiresAt)
+	}
+
+	auth, err := store.AuthorizeToken(ctx, created.Token)
+	if err != nil {
+		t.Fatalf("authorize: %v", err)
+	}
+	if !auth.CanReadAll() {
+		t.Fatal("expected the token to report blanket read access")
+	}
+	if !auth.CanReadBasemap("first", "current") {
+		t.Fatal("expected read_all to reach an existing basemap")
+	}
+
+	// A basemap catalogued after the token was issued must be reachable too;
+	// that is the whole point of read_all.
+	writeTestFile(t, filepath.Join(tileRoot, "second", "0", "0", "0.webp"), "tile")
+	if _, err := store.RunScan(ctx, defaultScanSourceCode); err != nil {
+		t.Fatalf("rescan: %v", err)
+	}
+	if !auth.CanReadBasemap("second", "current") {
+		t.Fatal("expected read_all to cover a basemap added later")
+	}
+
+	// Vectors behave the same way.
+	writeTestFile(t, filepath.Join(vectorRoot, "later.geojson"), `{"type":"FeatureCollection","features":[]}`)
+	if _, err := store.RunVectorScan(ctx); err != nil {
+		t.Fatalf("vector scan: %v", err)
+	}
+	assets, err := store.ListVectorAssets(ctx)
+	if err != nil || len(assets) != 1 {
+		t.Fatalf("expected one vector asset, got %d (%v)", len(assets), err)
+	}
+	if !auth.CanReadVector(assets[0].Code) {
+		t.Fatal("expected read_all to cover a vector added later")
+	}
+
+	// A plain read token still needs grants, so the scope is not accidental.
+	plain, err := store.CreateToken(ctx, CreateTokenInput{
+		Name:         "plain",
+		BasemapCodes: []string{"first"},
+	})
+	if err != nil {
+		t.Fatalf("create plain token: %v", err)
+	}
+	plainAuth, err := store.AuthorizeToken(ctx, plain.Token)
+	if err != nil {
+		t.Fatalf("authorize plain: %v", err)
+	}
+	if plainAuth.CanReadBasemap("second", "current") {
+		t.Fatal("a granted token must not pick up basemaps it was not granted")
+	}
+	if plainAuth.CanReadAll() {
+		t.Fatal("a plain token must not report blanket access")
+	}
+}

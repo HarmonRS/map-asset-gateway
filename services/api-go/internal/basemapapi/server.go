@@ -95,6 +95,14 @@ func New(store *basemap.Store, system basemap.SystemInfo, options Options) (*Ser
 			}
 			return strings.Join(parts, ", ")
 		},
+		"hasScope": func(scopes []string, want string) bool {
+			for _, scope := range scopes {
+				if scope == want {
+					return true
+				}
+			}
+			return false
+		},
 		"vectorTokenGrants": func(grants []basemap.VectorTokenGrant) string {
 			if len(grants) == 0 {
 				return "-"
@@ -1118,7 +1126,11 @@ func decodeTokenInput(r *http.Request) (basemap.CreateTokenInput, error) {
 		VectorCodes:  payload.VectorCodes,
 		Scopes:       payload.Scopes,
 	}
-	if strings.TrimSpace(payload.ExpiresAt) != "" {
+	switch strings.ToLower(strings.TrimSpace(payload.ExpiresAt)) {
+	case "never", "0":
+		input.NoExpiry = true
+	case "":
+	default:
 		parsed, err := time.Parse(time.RFC3339, payload.ExpiresAt)
 		if err != nil {
 			return basemap.CreateTokenInput{}, fmt.Errorf("parse expires_at: %w", err)
@@ -1139,9 +1151,14 @@ func decodeTokenInputFromForm(r *http.Request) (basemap.CreateTokenInput, error)
 		Scopes:       splitCSV(r.FormValue("scopes")),
 	}
 	if value := strings.TrimSpace(r.FormValue("expires_at")); value != "" {
-		if minutes, err := strconv.Atoi(value); err == nil && minutes > 0 {
-			expiresAt := time.Now().UTC().Add(time.Duration(minutes) * time.Minute)
-			input.ExpiresAt = &expiresAt
+		switch strings.ToLower(value) {
+		case "never", "0":
+			input.NoExpiry = true
+		default:
+			if minutes, err := strconv.Atoi(value); err == nil && minutes > 0 {
+				expiresAt := time.Now().UTC().Add(time.Duration(minutes) * time.Minute)
+				input.ExpiresAt = &expiresAt
+			}
 		}
 	}
 	return input, nil

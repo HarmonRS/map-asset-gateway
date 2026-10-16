@@ -212,7 +212,9 @@ type CreateTokenInput struct {
 	BasemapCodes []string
 	VectorCodes  []string
 	Scopes       []string
-	ExpiresAt    *time.Time
+	// NoExpiry creates a token that never expires, overriding the default TTL.
+	NoExpiry  bool
+	ExpiresAt *time.Time
 }
 
 type TokenAuth struct {

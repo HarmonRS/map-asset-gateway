@@ -584,6 +584,9 @@ func (s *Store) buildVectorDownloadURL(code string) string {
 }
 
 func (auth TokenAuth) CanReadVector(code string) bool {
+	if auth.CanReadAll() {
+		return true
+	}
 	group, ok := auth.VectorPermissions[readPermission]
 	if !ok {
 		return false

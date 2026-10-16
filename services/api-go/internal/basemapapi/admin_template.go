@@ -502,8 +502,8 @@ const adminTemplate = `<!DOCTYPE html>
               <form class="stack" method="post" action="/admin/tokens">
                 <div class="grid-form">
                   <div><label>令牌名称</label><input name="name" placeholder="viewer-a" required></div>
-                  <div><label>有效时长（分钟）</label><input name="expires_at" inputmode="numeric" placeholder="留空使用默认有效期"><div class="field-note">留空走服务端默认值。</div></div>
-                  <div><label>附加能力</label><label class="check"><input type="checkbox" name="scopes" value="slice"> 允许提交切片任务</label><div class="field-note">不勾选则只能读取已授权的底图与矢量。</div></div>
+                  <div><label>有效时长（分钟）</label><input name="expires_at" placeholder="留空用默认；填 never 表示永久"><div class="field-note">留空走服务端默认有效期；填 <b>never</b>（或 0）则永不过期。</div></div>
+                  <div><label>附加能力</label><label class="check"><input type="checkbox" name="scopes" value="read_all"> 全权限读取（含以后新增的图层）</label><label class="check"><input type="checkbox" name="scopes" value="slice"> 允许提交切片任务</label><div class="field-note">不勾选则只能读取下面列出的底图与矢量。</div></div>
                 </div>
                 <div class="grid-form">
                   <div><label>底图编码</label><textarea name="basemap_codes" placeholder="gaode-image, google-image"></textarea><div class="field-note">逗号或换行分隔，写底图的 code。</div></div>
@@ -529,8 +529,9 @@ const adminTemplate = `<!DOCTYPE html>
                     <div class="small muted">创建 {{fmtTime .CreatedAt}}</div>
                   </td>
                   <td class="small">
-                    <div><span class="muted">底图：</span>{{tokenGrants .Grants}}</div>
-                    <div style="margin-top:4px"><span class="muted">矢量：</span>{{vectorTokenGrants .VectorGrants}}</div>
+                    {{if hasScope .Scopes "read_all"}}<div><span class="badge success">全部底图与矢量（含新增）</span></div>
+                    {{else}}<div><span class="muted">底图：</span>{{tokenGrants .Grants}}</div>
+                    <div style="margin-top:4px"><span class="muted">矢量：</span>{{vectorTokenGrants .VectorGrants}}</div>{{end}}
                     <div style="margin-top:4px"><span class="muted">能力：</span>{{if .Scopes}}{{range $i, $s := .Scopes}}{{if $i}} · {{end}}{{$s}}{{end}}{{else}}-{{end}}</div>
                   </td>
                   <td><span class="badge {{statusTone .Status}}">{{statusText .Status}}</span></td>

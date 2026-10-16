@@ -29,14 +29,14 @@ func (s *Store) CreateToken(ctx context.Context, input CreateTokenInput) (Create
 		return CreatedToken{}, errors.New("token name is required")
 	}
 	// A token needs at least one capability: read grants, or the slice scope.
-	hasSliceScope := false
+	hasCapability := false
 	for _, value := range input.Scopes {
-		if strings.EqualFold(strings.TrimSpace(value), slicePermission) {
-			hasSliceScope = true
+		if normalized := strings.ToLower(strings.TrimSpace(value)); normalized == slicePermission || normalized == readAllPermission {
+			hasCapability = true
 		}
 	}
-	if len(input.BasemapCodes) == 0 && len(input.VectorCodes) == 0 && !hasSliceScope {
-		return CreatedToken{}, errors.New("at least one basemap code, vector code, or the slice scope is required")
+	if len(input.BasemapCodes) == 0 && len(input.VectorCodes) == 0 && !hasCapability {
+		return CreatedToken{}, errors.New("at least one basemap code, vector code, or capability scope is required")
 	}
 
 	resolvedVectorAssets := map[string]VectorAsset{}
@@ -66,7 +66,7 @@ func (s *Store) CreateToken(ctx context.Context, input CreateTokenInput) (Create
 	now := nowUTC()
 	// Fall back to the configured default lifetime so tokens do not live forever
 	// unless an explicit expiry was supplied.
-	if input.ExpiresAt == nil && s.cfg.TokenDefaultTTL > 0 {
+	if !input.NoExpiry && input.ExpiresAt == nil && s.cfg.TokenDefaultTTL > 0 {
 		expiresAt := now.Add(s.cfg.TokenDefaultTTL)
 		input.ExpiresAt = &expiresAt
 	}
@@ -91,7 +91,7 @@ func (s *Store) CreateToken(ctx context.Context, input CreateTokenInput) (Create
 		}
 	}
 	if len(normalizedCodes) == 0 {
-		if len(resolvedVectorAssets) == 0 && !hasSliceScope {
+		if len(resolvedVectorAssets) == 0 && !hasCapability {
 			return CreatedToken{}, errors.New("no valid basemap codes provided")
 		}
 	}
@@ -421,11 +421,17 @@ func (s *Store) AuthorizeToken(ctx context.Context, rawToken string) (TokenAuth,
 
 // Token scopes are coarse capabilities layered on top of per-resource grants.
 // Every token can read; "slice" additionally allows submitting tile jobs.
-const slicePermission = "slice"
+const (
+	slicePermission = "slice"
+	// readAllPermission grants read on every basemap and vector, including ones
+	// catalogued after the token was issued.
+	readAllPermission = "read_all"
+)
 
 var allowedTokenScopes = map[string]struct{}{
-	readPermission:  {},
-	slicePermission: {},
+	readPermission:    {},
+	slicePermission:   {},
+	readAllPermission: {},
 }
 
 // normalizeTokenScopes keeps only known scopes and always includes read, so the
@@ -466,7 +472,17 @@ func (auth TokenAuth) CanSlice() bool {
 	_, ok := auth.Scopes[slicePermission]
 	return ok
 }
+
+// CanReadAll reports whether the token carries blanket read access.
+func (auth TokenAuth) CanReadAll() bool {
+	_, ok := auth.Scopes[readAllPermission]
+	return ok
+}
+
 func (auth TokenAuth) CanReadBasemap(code string, version string) bool {
+	if auth.CanReadAll() {
+		return true
+	}
 	group, ok := auth.Permissions[readPermission]
 	if !ok {
 		return false
