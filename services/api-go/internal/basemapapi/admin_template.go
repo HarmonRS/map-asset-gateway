@@ -540,9 +540,14 @@ const adminTemplate = `<!DOCTYPE html>
                     <div class="muted">最近使用 {{fmtTimePtr .LastUsedAt}}</div>
                   </td>
                   <td>
-                    <form class="inline" method="post" action="/admin/tokens/{{.ID}}/disable" data-confirm="停用后该令牌立即失效，正在用它取图的下游会开始收到 401。确认停用？">
-                      <button type="submit" class="btn-danger">停用</button>
-                    </form>
+                    <div class="row-actions">
+                      <form class="inline" method="post" action="/admin/tokens/{{.ID}}/disable" data-confirm="停用后该令牌立即失效，正在用它取图的下游会开始收到 401。确认停用？">
+                        <button type="submit" class="btn-danger">停用</button>
+                      </form>
+                      <form class="inline" method="post" action="/admin/tokens/{{.ID}}/delete" data-confirm="删除会永久移除该令牌及其全部授权记录，无法恢复，正在使用它的下游会立即 401。确认删除？">
+                        <button type="submit" class="btn-quiet">删除</button>
+                      </form>
+                    </div>
                   </td>
                 </tr>
                 {{else}}

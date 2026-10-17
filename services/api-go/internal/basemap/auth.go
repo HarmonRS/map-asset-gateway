@@ -320,6 +320,22 @@ func (s *Store) DisableToken(ctx context.Context, tokenID string) error {
 	return nil
 }
 
+// DeleteToken removes a token and everything granted to it. Foreign keys
+// cascade to token_grants and vector_token_grants.
+func (s *Store) DeleteToken(ctx context.Context, tokenID string) error {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM service_tokens WHERE id = ?`, strings.TrimSpace(tokenID))
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return fmt.Errorf("token %q not found", tokenID)
+	}
+	return nil
+}
 func (s *Store) getTokenByID(ctx context.Context, tokenID string) (ServiceToken, error) {
 	row := s.db.QueryRowContext(ctx, `
 		SELECT id, name, token_hash, token_prefix, scopes, status, expires_at, last_used_at, created_at

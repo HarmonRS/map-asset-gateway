@@ -200,7 +200,7 @@ func withCORS(next http.Handler, allowed []string) http.Handler {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Vary", "Origin")
 				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Access-Token")
-				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 			}
 		}
 		if r.Method == http.MethodOptions {
@@ -315,6 +315,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/v1/admin/tokens", s.requireAdmin(s.handleTokensJSON))
 	s.mux.HandleFunc("POST /api/v1/admin/tokens", s.requireAdmin(s.handleCreateTokenJSON))
 	s.mux.HandleFunc("POST /api/v1/admin/tokens/{id}/disable", s.requireAdmin(s.handleDisableTokenJSON))
+	s.mux.HandleFunc("DELETE /api/v1/admin/tokens/{id}", s.requireAdmin(s.handleDeleteTokenJSON))
 	s.mux.HandleFunc("GET /api/v1/admin/push-records", s.requireAdmin(s.handlePushRecordsJSON))
 	s.mux.HandleFunc("POST /api/v1/admin/pushes", s.requireAdmin(s.handlePushJSON))
 	s.mux.HandleFunc("GET /api/v1/admin/vector-push-records", s.requireAdmin(s.handleVectorPushRecordsJSON))
@@ -347,6 +348,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /admin/targets", s.requireAdmin(s.handleCreateTargetForm))
 	s.mux.HandleFunc("POST /admin/tokens", s.requireAdmin(s.handleCreateTokenForm))
 	s.mux.HandleFunc("POST /admin/tokens/{id}/disable", s.requireAdmin(s.handleDisableTokenForm))
+	s.mux.HandleFunc("POST /admin/tokens/{id}/delete", s.requireAdmin(s.handleDeleteTokenForm))
 	s.mux.HandleFunc("POST /admin/pushes", s.requireAdmin(s.handlePushForm))
 	s.mux.HandleFunc("POST /admin/vector-pushes", s.requireAdmin(s.handleVectorPushForm))
 	s.mux.HandleFunc("POST /admin/health/check", s.requireAdmin(s.handleCheckHealthForm))
@@ -589,6 +591,13 @@ func (s *Server) handleDisableTokenJSON(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+func (s *Server) handleDeleteTokenJSON(w http.ResponseWriter, r *http.Request) {
+	if err := s.store.DeleteToken(r.Context(), r.PathValue("id")); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
 func (s *Server) handlePushRecordsJSON(w http.ResponseWriter, r *http.Request) {
 	items, err := s.store.ListPushRecords(r.Context(), 20)
 	if err != nil {
@@ -1059,6 +1068,10 @@ func (s *Server) handleCreateTokenForm(w http.ResponseWriter, r *http.Request) {
 	s.renderAdmin(w, r, "访问令牌已创建", item.Token, nil)
 }
 
+func (s *Server) handleDeleteTokenForm(w http.ResponseWriter, r *http.Request) {
+	err := s.store.DeleteToken(r.Context(), r.PathValue("id"))
+	s.redirectAdmin(w, r, "访问令牌已删除", err)
+}
 func (s *Server) handleDisableTokenForm(w http.ResponseWriter, r *http.Request) {
 	err := s.store.DisableToken(r.Context(), r.PathValue("id"))
 	s.redirectAdmin(w, r, "访问令牌已停用", err)

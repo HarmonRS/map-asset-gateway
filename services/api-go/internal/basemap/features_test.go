@@ -957,3 +957,56 @@ func TestReadAllScopeCoversNewResourcesAndNeverExpires(t *testing.T) {
 		t.Fatal("a plain token must not report blanket access")
 	}
 }
+
+func TestDeleteTokenRemovesGrants(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	tileRoot := filepath.Join(root, "tiles")
+	writeTestFile(t, filepath.Join(tileRoot, "demo", "0", "0", "0.webp"), "tile")
+
+	store := openTestStore(t, StoreConfig{
+		SQLitePath:    filepath.Join(root, "basemap.db"),
+		ScanRoot:      tileRoot,
+		APIBaseURL:    "http://127.0.0.1:8910",
+		TileBaseURL:   "http://127.0.0.1:8910",
+		VectorBaseURL: "http://127.0.0.1:8910",
+	})
+	if _, err := store.RunScan(ctx, defaultScanSourceCode); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+
+	created, err := store.CreateToken(ctx, CreateTokenInput{Name: "gone", BasemapCodes: []string{"demo"}})
+	if err != nil {
+		t.Fatalf("create token: %v", err)
+	}
+
+	if err := store.DeleteToken(ctx, created.Meta.ID); err != nil {
+		t.Fatalf("delete token: %v", err)
+	}
+
+	// The token itself is gone.
+	var count int
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM service_tokens WHERE id = ?`, created.Meta.ID).Scan(&count); err != nil {
+		t.Fatalf("count tokens: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected the token row to be deleted, got %d", count)
+	}
+
+	// And so are its grants, via the foreign-key cascade.
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM token_grants WHERE token_id = ?`, created.Meta.ID).Scan(&count); err != nil {
+		t.Fatalf("count grants: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected grants to cascade, got %d rows", count)
+	}
+
+	// The deleted token no longer authenticates.
+	if _, err := store.AuthorizeToken(ctx, created.Token); err == nil {
+		t.Fatal("a deleted token must not authenticate")
+	}
+	// Deleting an unknown id reports not-found.
+	if err := store.DeleteToken(ctx, created.Meta.ID); err == nil {
+		t.Fatal("expected deleting a missing token to error")
+	}
+}
