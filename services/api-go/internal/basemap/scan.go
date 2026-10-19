@@ -16,22 +16,24 @@ import (
 )
 
 type scannedVersion struct {
-	BasemapCode string
-	Name        string
-	Type        string
-	Status      string
-	Description string
-	Version     string
-	Manifest    string
-	TileRoot    string
-	TileFormat  string
-	TileScheme  string
-	MinZoom     int
-	MaxZoom     int
-	BBox        []float64
-	Attribution string
-	Metadata    map[string]any
-	IsDefault   bool
+	BasemapCode  string
+	Name         string
+	Type         string
+	Status       string
+	Description  string
+	Version      string
+	Manifest     string
+	TileRoot     string
+	TileFormat   string
+	TileScheme   string
+	MinZoom      int
+	MaxZoom      int
+	BBox         []float64
+	Coverage     []Bounds
+	CoverageZoom int
+	Attribution  string
+	Metadata     map[string]any
+	IsDefault    bool
 }
 
 // scanCounts reports what a scan actually changed, so operators can tell a real
@@ -221,6 +223,12 @@ func (s *Store) findManifestVersions(source ScanSource) ([]scannedVersion, map[s
 				manifest.MaxZoom = maxZoom
 			}
 
+			tileScheme := defaultText(manifest.TileScheme, "xyz")
+			coverage, coverageZoom, err := deriveCoverage(tileRoot, manifest.MinZoom, tileScheme)
+			if err != nil {
+				return fmt.Errorf("derive coverage for %s: %w", tileRoot, err)
+			}
+
 			if relPath, err := filepath.Rel(source.RootPath, tileRoot); err == nil {
 				first := strings.Split(filepath.ToSlash(relPath), "/")[0]
 				if first != "" && first != "." {
@@ -229,22 +237,24 @@ func (s *Store) findManifestVersions(source ScanSource) ([]scannedVersion, map[s
 			}
 
 			items = append(items, scannedVersion{
-				BasemapCode: manifest.Code,
-				Name:        defaultText(manifest.Name, manifest.Code),
-				Type:        defaultText(manifest.Type, "xyz"),
-				Status:      defaultText(manifest.Status, "ready"),
-				Description: manifest.Description,
-				Version:     defaultText(manifest.Version, "current"),
-				Manifest:    manifestPath,
-				TileRoot:    tileRoot,
-				TileFormat:  normalizeTileFormat(manifest.TileFormat),
-				TileScheme:  defaultText(manifest.TileScheme, "xyz"),
-				MinZoom:     manifest.MinZoom,
-				MaxZoom:     manifest.MaxZoom,
-				BBox:        manifest.BBox,
-				Attribution: manifest.Attribution,
-				Metadata:    manifest.Metadata,
-				IsDefault:   manifest.IsDefault,
+				BasemapCode:  manifest.Code,
+				Name:         defaultText(manifest.Name, manifest.Code),
+				Type:         defaultText(manifest.Type, "xyz"),
+				Status:       defaultText(manifest.Status, "ready"),
+				Description:  manifest.Description,
+				Version:      defaultText(manifest.Version, "current"),
+				Manifest:     manifestPath,
+				TileRoot:     tileRoot,
+				TileFormat:   normalizeTileFormat(manifest.TileFormat),
+				TileScheme:   tileScheme,
+				MinZoom:      manifest.MinZoom,
+				MaxZoom:      manifest.MaxZoom,
+				BBox:         manifest.BBox,
+				Coverage:     coverage,
+				CoverageZoom: coverageZoom,
+				Attribution:  manifest.Attribution,
+				Metadata:     manifest.Metadata,
+				IsDefault:    manifest.IsDefault,
 			})
 			return nil
 		}
@@ -309,21 +319,28 @@ func (s *Store) findDirectTileRoots(source ScanSource, skip map[string]struct{})
 			continue
 		}
 
+		coverage, coverageZoom, err := deriveCoverage(rootPath, minZoom, "xyz")
+		if err != nil {
+			return nil, fmt.Errorf("derive coverage for %s: %w", rootPath, err)
+		}
+
 		code := normalizeBasemapCode(name)
 		if code == "" {
 			continue
 		}
 		items = append(items, scannedVersion{
-			BasemapCode: code,
-			Name:        name,
-			Type:        "xyz",
-			Status:      "ready",
-			Version:     "current",
-			TileRoot:    rootPath,
-			TileFormat:  format,
-			TileScheme:  "xyz",
-			MinZoom:     minZoom,
-			MaxZoom:     maxZoom,
+			BasemapCode:  code,
+			Name:         name,
+			Type:         "xyz",
+			Status:       "ready",
+			Version:      "current",
+			TileRoot:     rootPath,
+			TileFormat:   format,
+			TileScheme:   "xyz",
+			Coverage:     coverage,
+			CoverageZoom: coverageZoom,
+			MinZoom:      minZoom,
+			MaxZoom:      maxZoom,
 			Metadata: map[string]any{
 				"discovered_from": "directory_scan",
 			},
@@ -426,6 +443,8 @@ type existingVersion struct {
 	MaxZoom      int
 	IsDefault    bool
 	BBoxJSON     string
+	CoverageJSON string
+	CoverageZoom int
 	Attribution  string
 	MetadataJSON string
 }
@@ -454,6 +473,8 @@ func (s *Store) persistScanResult(ctx context.Context, source ScanSource, items 
 			v.max_zoom,
 			v.is_default,
 			v.bbox_json,
+			v.coverage_json,
+			v.coverage_zoom,
 			v.attribution,
 			v.metadata_json
 		FROM basemap_versions v
@@ -483,6 +504,8 @@ func (s *Store) persistScanResult(ctx context.Context, source ScanSource, items 
 			&item.MaxZoom,
 			&isDefault,
 			&item.BBoxJSON,
+			&item.CoverageJSON,
+			&item.CoverageZoom,
 			&item.Attribution,
 			&item.MetadataJSON,
 		); err != nil {
@@ -561,6 +584,8 @@ func scannedVersionMatches(item scannedVersion, prev existingVersion) bool {
 		item.MaxZoom == prev.MaxZoom &&
 		item.IsDefault == prev.IsDefault &&
 		writeJSON(item.BBox) == prev.BBoxJSON &&
+		writeJSON(item.Coverage) == prev.CoverageJSON &&
+		item.CoverageZoom == prev.CoverageZoom &&
 		item.Attribution == prev.Attribution &&
 		writeJSON(item.Metadata) == prev.MetadataJSON
 }
@@ -590,8 +615,8 @@ func (s *Store) upsertScannedVersionTx(ctx context.Context, tx *sql.Tx, source S
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO basemap_versions (
 			id, basemap_id, scan_source_id, version, status, is_default, manifest_path, tile_root_path, url_template,
-			tile_format, tile_scheme, min_zoom, max_zoom, bbox_json, attribution, metadata_json, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			tile_format, tile_scheme, min_zoom, max_zoom, bbox_json, coverage_json, coverage_zoom, attribution, metadata_json, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(basemap_id, version) DO UPDATE SET
 			scan_source_id = excluded.scan_source_id,
 			status = excluded.status,
@@ -604,10 +629,12 @@ func (s *Store) upsertScannedVersionTx(ctx context.Context, tx *sql.Tx, source S
 			min_zoom = excluded.min_zoom,
 			max_zoom = excluded.max_zoom,
 			bbox_json = excluded.bbox_json,
+			coverage_json = excluded.coverage_json,
+			coverage_zoom = excluded.coverage_zoom,
 			attribution = excluded.attribution,
 			metadata_json = excluded.metadata_json,
 			updated_at = excluded.updated_at
-	`, versionID, basemapID, source.ID, item.Version, item.Status, isDefault, item.Manifest, item.TileRoot, s.buildURLTemplate(item.BasemapCode, item.Version, item.TileFormat), item.TileFormat, item.TileScheme, item.MinZoom, item.MaxZoom, writeJSON(item.BBox), item.Attribution, writeJSON(item.Metadata), toRFC3339(now), toRFC3339(now))
+	`, versionID, basemapID, source.ID, item.Version, item.Status, isDefault, item.Manifest, item.TileRoot, s.buildURLTemplate(item.BasemapCode, item.Version, item.TileFormat), item.TileFormat, item.TileScheme, item.MinZoom, item.MaxZoom, writeJSON(item.BBox), writeJSON(item.Coverage), item.CoverageZoom, item.Attribution, writeJSON(item.Metadata), toRFC3339(now), toRFC3339(now))
 	if err != nil {
 		return err
 	}

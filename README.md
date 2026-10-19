@@ -20,6 +20,7 @@ The service does not generate tiles, does not rebuild vector data, and does not 
 ## Current Capabilities
 
 - scan `BASEMAP_SCAN_ROOT` into SQLite
+- derive disjoint WGS84 coverage rectangles from the lowest tile zoom at scan time
 - scan `VECTOR_SCAN_ROOT` into SQLite
 - support two basemap directory styles
   - manifest-based directories

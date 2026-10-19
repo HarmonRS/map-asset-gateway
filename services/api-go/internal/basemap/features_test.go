@@ -512,6 +512,14 @@ func TestBootstrapMigratesLegacySchema(t *testing.T) {
 	if health != "" {
 		t.Fatalf("expected a blank default health, got %q", health)
 	}
+	var coverageJSON string
+	var coverageZoom int
+	if err := store.db.QueryRow("SELECT coverage_json, coverage_zoom FROM basemap_versions WHERE id = 'v1'").Scan(&coverageJSON, &coverageZoom); err != nil {
+		t.Fatalf("legacy row did not gain coverage columns: %v", err)
+	}
+	if coverageJSON != "" || coverageZoom != 0 {
+		t.Fatalf("expected blank coverage defaults, got %q/%d", coverageJSON, coverageZoom)
+	}
 
 	var attempts int
 	var nextAttempt sql.NullString

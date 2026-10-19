@@ -30,21 +30,35 @@ type Basemap struct {
 	UpdatedAt   time.Time        `json:"updated_at"`
 }
 
+// Bounds is one contiguous covered area in WGS84 degrees. A mosaic of scattered
+// captures yields several of these; a single bbox would span the empty space
+// between them and defeat the point.
+type Bounds struct {
+	MinLon float64 `json:"min_lon"`
+	MinLat float64 `json:"min_lat"`
+	MaxLon float64 `json:"max_lon"`
+	MaxLat float64 `json:"max_lat"`
+}
+
 type BasemapVersion struct {
-	ID           string         `json:"id"`
-	BasemapID    string         `json:"basemap_id"`
-	BasemapCode  string         `json:"basemap_code"`
-	Version      string         `json:"version"`
-	Status       string         `json:"status"`
-	IsDefault    bool           `json:"is_default"`
-	ManifestPath string         `json:"manifest_path"`
-	TileRootPath string         `json:"tile_root_path"`
-	URLTemplate  string         `json:"url_template"`
-	TileFormat   string         `json:"tile_format"`
-	TileScheme   string         `json:"tile_scheme"`
-	MinZoom      int            `json:"min_zoom"`
-	MaxZoom      int            `json:"max_zoom"`
-	BBox         []float64      `json:"bbox,omitempty"`
+	ID           string    `json:"id"`
+	BasemapID    string    `json:"basemap_id"`
+	BasemapCode  string    `json:"basemap_code"`
+	Version      string    `json:"version"`
+	Status       string    `json:"status"`
+	IsDefault    bool      `json:"is_default"`
+	ManifestPath string    `json:"manifest_path"`
+	TileRootPath string    `json:"tile_root_path"`
+	URLTemplate  string    `json:"url_template"`
+	TileFormat   string    `json:"tile_format"`
+	TileScheme   string    `json:"tile_scheme"`
+	MinZoom      int       `json:"min_zoom"`
+	MaxZoom      int       `json:"max_zoom"`
+	BBox         []float64 `json:"bbox,omitempty"`
+	// Coverage is the set of contiguous areas that actually hold tiles,
+	// derived at scan time from the lowest zoom level.
+	Coverage     []Bounds       `json:"coverage,omitempty"`
+	CoverageZoom int            `json:"coverage_zoom"`
 	Attribution  string         `json:"attribution,omitempty"`
 	Metadata     map[string]any `json:"metadata,omitempty"`
 	CreatedAt    time.Time      `json:"created_at"`

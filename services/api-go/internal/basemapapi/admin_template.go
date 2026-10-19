@@ -393,6 +393,7 @@ const adminTemplate = `<!DOCTYPE html>
                         <span class="badge {{statusTone .Status}}">{{versionLabel .}}</span>
                         {{$h := index $.VersionHealth .ID}}{{if and $h.Health (ne $h.Health "ok")}}<span class="badge danger">文件缺失</span>{{else if $h.Health}}<span class="badge success">在位</span>{{end}}
                         <span class="small muted">级别 {{.MinZoom}}-{{.MaxZoom}}</span>
+                        {{if .Coverage}}<span class="small muted">覆盖 {{len .Coverage}} 区 · z{{.CoverageZoom}}</span>{{end}}
                         <span class="small muted">{{.TileFormat}}</span>
                       </div>
                       <div class="mono small break" style="margin-top:6px">{{.URLTemplate}}</div>

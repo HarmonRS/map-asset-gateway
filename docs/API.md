@@ -155,6 +155,27 @@ POST /api/v1/admin/tokens
 http://<tile-base>/tiles/gaode-image/current/{z}/{x}/{y}.webp
 ```
 
+每个版本还会返回实际覆盖范围：
+
+```json
+{
+  "coverage_zoom": 12,
+  "coverage": [
+    {"min_lon": 124.65, "min_lat": 52.95, "max_lon": 124.80, "max_lat": 53.07},
+    {"min_lon": 125.86, "min_lat": 50.75, "max_lon": 126.03, "max_lat": 50.89}
+  ]
+}
+```
+
+`coverage` 是扫描时按**最低级别**瓦片的存在情况推导出的 WGS84 矩形，
+相邻瓦片会合并，彼此分离的航摄区域保持为多个矩形。`coverage_zoom` 表示
+推导时使用的级别（`0` 也是合法级别）。
+
+调用端应优先用 `coverage` 判断是否需要请求某个 z/x/y；只有一块区域时也可以
+直接作为地图 `bounds`。**不要**把多个分离区域强行合成一个总 bbox，否则会把
+中间的大片空白也算进去，重新出现大量 404。`coverage` 为空时再回退到 `bbox`
+或不做范围限制。
+
 ---
 
 ## 5. 切片 API（需 `slice` scope 的令牌）

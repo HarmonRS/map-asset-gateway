@@ -21,6 +21,8 @@ type basemapVersionRow struct {
 	MinZoom      int
 	MaxZoom      int
 	BBoxJSON     string
+	CoverageJSON string
+	CoverageZoom int
 	Attribution  string
 	MetadataJSON string
 	CreatedAt    string
@@ -58,6 +60,8 @@ func scanBasemapVersionRow(scanner interface {
 		&row.MinZoom,
 		&row.MaxZoom,
 		&row.BBoxJSON,
+		&row.CoverageJSON,
+		&row.CoverageZoom,
 		&row.Attribution,
 		&row.MetadataJSON,
 		&row.CreatedAt,
@@ -91,6 +95,10 @@ func decodeBasemapVersion(row basemapVersionRow) BasemapVersion {
 	if strings.TrimSpace(row.BBoxJSON) != "" {
 		_ = readMaybeJSON(row.BBoxJSON, &item.BBox)
 	}
+	if strings.TrimSpace(row.CoverageJSON) != "" {
+		_ = readMaybeJSON(row.CoverageJSON, &item.Coverage)
+	}
+	item.CoverageZoom = row.CoverageZoom
 	if strings.TrimSpace(row.MetadataJSON) != "" {
 		_ = readMaybeJSON(row.MetadataJSON, &item.Metadata)
 	}
