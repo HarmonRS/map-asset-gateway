@@ -604,6 +604,25 @@ func (s *Store) ResolveTile(ctx context.Context, auth TokenAuth, basemapCode, ve
 	info, err := os.Stat(filePath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
+			if _, rootErr := os.Stat(versionItem.TileRootPath); rootErr != nil {
+				return TileDescriptor{}, fmt.Errorf("tile %s not found", tilePath)
+			}
+			hint, ok, hintErr := renderCoverageHintTile(versionItem, tilePath)
+			if hintErr != nil {
+				return TileDescriptor{}, hintErr
+			}
+			if ok {
+				return TileDescriptor{
+					Data:         hint,
+					CacheControl: "public, max-age=300",
+					CoverageHint: true,
+					ContentType:  "image/png",
+					Basemap:      basemap,
+					Version:      versionItem,
+					Token:        auth.Token,
+					RelativePath: tilePath,
+				}, nil
+			}
 			return TileDescriptor{}, fmt.Errorf("tile %s not found", tilePath)
 		}
 		return TileDescriptor{}, err

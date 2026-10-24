@@ -160,6 +160,7 @@ http://<tile-base>/tiles/gaode-image/current/{z}/{x}/{y}.webp
 ```json
 {
   "coverage_zoom": 12,
+  "coverage_hint": true,
   "coverage": [
     {"min_lon": 124.65, "min_lat": 52.95, "max_lon": 124.80, "max_lat": 53.07},
     {"min_lon": 125.86, "min_lat": 50.75, "max_lon": 126.03, "max_lat": 50.89}
@@ -175,6 +176,12 @@ http://<tile-base>/tiles/gaode-image/current/{z}/{x}/{y}.webp
 直接作为地图 `bounds`。**不要**把多个分离区域强行合成一个总 bbox，否则会把
 中间的大片空白也算进去，重新出现大量 404。`coverage` 为空时再回退到 `bbox`
 或不做范围限制。
+
+当 `coverage_hint` 为 `true` 时，服务会为低于 `min_zoom` 的请求即时生成透明
+提示瓦片。提示瓦片用橙色 `UAV` 标记和青色范围框指出“此处有无人机数据”，
+响应头带 `X-Coverage-Hint: 1`，缓存 5 分钟；到达真实 `min_zoom` 后仍返回
+原始影像瓦片。提示瓦片只在请求范围与 `coverage` 相交时生成，其他位置仍为
+404，因此前端最好继续使用 `coverage` 过滤请求。
 
 ---
 

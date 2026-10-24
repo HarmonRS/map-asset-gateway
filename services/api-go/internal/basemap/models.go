@@ -59,6 +59,7 @@ type BasemapVersion struct {
 	// derived at scan time from the lowest zoom level.
 	Coverage     []Bounds       `json:"coverage,omitempty"`
 	CoverageZoom int            `json:"coverage_zoom"`
+	CoverageHint bool           `json:"coverage_hint"`
 	Attribution  string         `json:"attribution,omitempty"`
 	Metadata     map[string]any `json:"metadata,omitempty"`
 	CreatedAt    time.Time      `json:"created_at"`

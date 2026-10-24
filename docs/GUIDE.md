@@ -93,6 +93,20 @@ curl.exe -H "Authorization: Bearer <令牌>" http://192.168.1.62:8910/api/v1/cat
   一个总 bbox，否则中间空白区域会重新产生大量 404；
 - `coverage` 为空时再回退到 `bbox`，两者都没有就不设范围限制。
 
+如果版本返回 `coverage_hint: true`，前端应把**地图图层的 `minZoom` 设为 0**，
+而不是设为影像真实的 `min_zoom`。这样低级别会显示橙色 `UAV` 提示标记，
+放大到真实级别后自动切换为影像：
+
+```javascript
+L.tileLayer(version.url_template + "?token=" + token, {
+  minZoom: version.coverage_hint ? 0 : version.min_zoom,
+  maxZoom: version.max_zoom
+}).addTo(map);
+```
+
+提示瓦片是服务即时生成的透明 PNG，不会写入切片目录；真实影像的 `min_zoom`
+仍以目录里的值为准。
+
 ---
 
 ## 二、无人机影像：一次次的累加

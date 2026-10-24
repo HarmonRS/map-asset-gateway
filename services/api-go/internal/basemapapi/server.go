@@ -729,7 +729,20 @@ func (s *Server) handleTile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", item.ContentType)
-	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	cacheControl := item.CacheControl
+	if cacheControl == "" {
+		cacheControl = "public, max-age=31536000, immutable"
+	}
+	w.Header().Set("Cache-Control", cacheControl)
+	if item.CoverageHint {
+		w.Header().Set("X-Coverage-Hint", "1")
+	}
+	if len(item.Data) > 0 {
+		w.Header().Set("Content-Length", strconv.Itoa(len(item.Data)))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(item.Data)
+		return
+	}
 	http.ServeFile(w, r, item.FilePath)
 }
 

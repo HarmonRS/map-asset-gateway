@@ -21,6 +21,7 @@ The service does not generate tiles, does not rebuild vector data, and does not 
 
 - scan `BASEMAP_SCAN_ROOT` into SQLite
 - derive disjoint WGS84 coverage rectangles from the lowest tile zoom at scan time
+- synthesize low-zoom UAV hint tiles from coverage when a layer starts at a high zoom
 - scan `VECTOR_SCAN_ROOT` into SQLite
 - support two basemap directory styles
   - manifest-based directories

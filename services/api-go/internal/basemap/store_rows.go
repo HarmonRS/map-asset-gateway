@@ -99,6 +99,7 @@ func decodeBasemapVersion(row basemapVersionRow) BasemapVersion {
 		_ = readMaybeJSON(row.CoverageJSON, &item.Coverage)
 	}
 	item.CoverageZoom = row.CoverageZoom
+	item.CoverageHint = len(item.Coverage) > 0 && item.MinZoom > 0
 	if strings.TrimSpace(row.MetadataJSON) != "" {
 		_ = readMaybeJSON(row.MetadataJSON, &item.Metadata)
 	}

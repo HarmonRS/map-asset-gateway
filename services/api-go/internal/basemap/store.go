@@ -111,6 +111,9 @@ type CreatedToken struct {
 
 type TileDescriptor struct {
 	FilePath     string
+	Data         []byte
+	CacheControl string
+	CoverageHint bool
 	ContentType  string
 	Basemap      Basemap
 	Version      BasemapVersion
