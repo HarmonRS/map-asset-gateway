@@ -3,8 +3,8 @@
     把一份已切好的 z/x/y 瓦片目录（例如大疆智图 terra_dom\tile）并入一个图层。
 
 .DESCRIPTION
-    做四件事：校验源目录、检查扩展名是否与现有图层冲突、拷贝进扫描根、
-    写好 manifest.json，最后触发一次扫描。
+    做四件事：校验源目录、检查扩展名是否与现有图层冲突、只拷贝数字层级目录
+    进扫描根、写好 manifest.json，最后触发一次扫描。
 
     同一个图层只能有一种瓦片扩展名。服务发布时只会采用其中一个扩展名，
     若目录里混了 .png 和 .webp，另一种会全部 404 且不报错，所以这里直接拦住。
@@ -86,11 +86,24 @@ if ($existingFormat -and $existingFormat -ne $srcFormat) {
 }
 Write-Host ("瓦片格式: .{0}{1}" -f $srcFormat, $(if ($existingFormat) { "（与现有图层一致）" } else { "" }))
 
-# 3) 拷贝（robocopy 0-7 都算成功）
+# 3) 只拷贝 z/x/y 数字层级目录，避免把 Terra 的 TIF、ZIP、报告和日志
+# 一起带进瓦片根目录。
 Write-Host "`n开始拷贝……"
-robocopy $Source $Dest /E /NFL /NDL /NP /R:1 /W:1 /MT:8 | Out-Null
-$rc = $LASTEXITCODE
-if ($rc -ge 8) { throw "robocopy 失败，退出码 $rc" }
+$zoomDirs = @(
+    Get-ChildItem -LiteralPath $Source -Directory |
+        Where-Object { $_.Name -match '^\d+$' } |
+        Sort-Object { [int]$_.Name }
+)
+if ($zoomDirs.Count -eq 0) {
+    throw "源目录下没有可导入的数字层级目录：$Source"
+}
+foreach ($zoomDir in $zoomDirs) {
+    $zoomDest = Join-Path $Dest $zoomDir.Name
+    Write-Host ("  复制 z{0}" -f $zoomDir.Name)
+    robocopy $zoomDir.FullName $zoomDest /E /NFL /NDL /NP /R:1 /W:1 /MT:8 | Out-Null
+    $rc = $LASTEXITCODE
+    if ($rc -ge 8) { throw "robocopy 失败，层级 z$($zoomDir.Name)，退出码 $rc" }
+}
 
 # 4) 写 manifest（保留已有显示名，除非显式传了 -Name）
 $manifestPath = Join-Path $Dest 'manifest.json'
